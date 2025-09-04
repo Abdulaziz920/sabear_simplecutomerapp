@@ -102,7 +102,7 @@ pipeline {
                 slackSend(
                     channel: "${SLACK_CHANNEL}",
                     color: "#36A64F",
-                    message: "Declarative pipeline for *Simple Customer App* has been successfully deployed in Tomcat :white_check_mark: by SNL for Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"
+                    message: "Declarative pipeline for *Simple Customer App* has been successfully deployed in Tomcat :white_check_mark: by Abdul Aziz for Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"
                 )
             }
         }
