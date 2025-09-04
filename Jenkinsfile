@@ -1,22 +1,20 @@
 pipeline {
-    agent {
-        label "master"
-    }
+    agent { label "master" }
 
     tools {
-        maven "MVN_HOME"        // Maven tool configured in Jenkins
-        // Make sure SonarQube CLI is installed as 'sonar-scanner' under Global Tool Configuration
+        maven "MVN_HOME"       // Jenkins Maven tool
+        // Ensure SonarQube CLI is installed as 'sonar-scanner'
     }
 
     environment {
-        // Nexus configuration
+        // Nexus
         NEXUS_VERSION       = "nexus3"
         NEXUS_PROTOCOL      = "http"
         NEXUS_URL           = "34.207.60.84:8081"
         NEXUS_REPOSITORY    = "Jenkins-04-Task-1"
         NEXUS_CREDENTIAL_ID = "Nexux_server"
 
-        // Tomcat credentials
+        // Tomcat
         TOMCAT_CRED         = "Tomcat-credentials"
     }
 
@@ -36,7 +34,6 @@ pipeline {
 
         stage("SonarQube Analysis") {
             steps {
-                // 'sonar-scanner' must exactly match the name in Jenkins Global Tool Configuration
                 withSonarQubeEnv('sonar-scanner') {
                     sh 'sonar-scanner'
                 }
@@ -46,27 +43,32 @@ pipeline {
         stage("Publish to Nexus") {
             steps {
                 script {
-                    def pom = readMavenPom file: "pom.xml"
-                    def filesByGlob = findFiles(glob: "target/*.${pom.packaging}")
+                    // Extract values from POM using Maven CLI
+                    def groupId    = sh(script: "mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout", returnStdout: true).trim()
+                    def artifactId = sh(script: "mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout", returnStdout: true).trim()
+                    def version    = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
+                    def packaging  = sh(script: "mvn help:evaluate -Dexpression=project.packaging -q -DforceStdout", returnStdout: true).trim()
+
+                    def filesByGlob = findFiles(glob: "target/*.${packaging}")
 
                     if (filesByGlob.size() == 0) {
                         error "No artifact found in target directory"
                     }
 
                     def artifactPath = filesByGlob[0].path
-                    echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version: ${pom.version}"
+                    echo "*** File: ${artifactPath}, group: ${groupId}, packaging: ${packaging}, version: ${version}"
 
                     nexusArtifactUploader(
                         nexusVersion: NEXUS_VERSION,
                         protocol: NEXUS_PROTOCOL,
                         nexusUrl: NEXUS_URL,
-                        groupId: pom.groupId,
-                        version: pom.version,
+                        groupId: groupId,
+                        version: version,
                         repository: NEXUS_REPOSITORY,
                         credentialsId: NEXUS_CREDENTIAL_ID,
                         artifacts: [
-                            [artifactId: pom.artifactId, classifier: '', file: artifactPath, type: pom.packaging],
-                            [artifactId: pom.artifactId, classifier: '', file: "pom.xml", type: "pom"]
+                            [artifactId: artifactId, classifier: '', file: artifactPath, type: packaging],
+                            [artifactId: artifactId, classifier: '', file: "pom.xml", type: "pom"]
                         ]
                     )
                 }
