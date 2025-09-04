@@ -26,6 +26,14 @@ pipeline {
                 sh 'mvn clean package -DskipTests'
             }
         }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-scanner') {
+                    sh 'sonar-scanner'
+                }
+            }
+        }
         
         stage('Deploy to Nexus') {
             steps {
@@ -54,6 +62,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Deploy to Tomcat') {
             steps {
                 script {
@@ -89,6 +98,7 @@ pipeline {
             }
         }
     }
+    
     post {
         success {
             echo 'Pipeline finished successfully!'
