@@ -19,11 +19,14 @@ pipeline {
                 git 'https://github.com/Abdulaziz920/sabear_simplecutomerapp.git'
             }
         }
-        stage("mvn build") {
-            steps {
-                sh 'mvn-Dmaven.test.failure.ignore=true clean install'
-            }
+        stage('Build') {
+    steps {
+        withMaven(maven: 'MAVEN_HOME') {
+            sh 'mvn -Dmaven.test.failure.ignore=true clean install'
         }
+    }
+}
+
         stage("SonarCloud") {
             steps {
                 withSonarQubeEnv('sonarqube-server') {
