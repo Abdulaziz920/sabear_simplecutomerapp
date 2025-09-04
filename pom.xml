@@ -25,4 +25,15 @@
          </plugin>
       </plugins>
    </build>
+         <distributionManagement>
+        <repository>
+            <id>Jenkins-04-Task-1</id>
+            <url>http://34.207.60.84:8081/repository/maven-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>Jenkins-04-Task-1</id>
+            <url>http://34.207.60.84:8081/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+</project>
 </project>
