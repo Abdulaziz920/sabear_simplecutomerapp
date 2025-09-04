@@ -2,8 +2,7 @@ pipeline {
     agent { label "master" }
 
     tools {
-        maven "MVN_HOME"       // Jenkins Maven tool
-        // Ensure SonarQube CLI is installed as 'sonar-scanner'
+        maven "MVN_HOME"
     }
 
     environment {
@@ -12,7 +11,7 @@ pipeline {
         NEXUS_PROTOCOL      = "http"
         NEXUS_URL           = "34.207.60.84:8081"
         NEXUS_REPOSITORY    = "Jenkins-04-Task-1"
-        NEXUS_CREDENTIAL_ID = "Nexux_server"
+        NEXUS_CREDENTIAL_ID = "Nexux_server" // <--- your Nexus credential ID
 
         // Tomcat
         TOMCAT_CRED         = "Tomcat-credentials"
@@ -43,7 +42,6 @@ pipeline {
         stage("Publish to Nexus") {
             steps {
                 script {
-                    // readMavenPom version (sandbox-safe once approved)
                     def pom = readMavenPom file: "pom.xml"
                     def filesByGlob = findFiles(glob: "target/*.${pom.packaging}")
 
@@ -54,6 +52,7 @@ pipeline {
                     def artifactPath = filesByGlob[0].path
                     echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version: ${pom.version}"
 
+                    // Ensure the correct credentials ID is used here
                     nexusArtifactUploader(
                         nexusVersion: NEXUS_VERSION,
                         protocol: NEXUS_PROTOCOL,
@@ -61,7 +60,7 @@ pipeline {
                         groupId: pom.groupId,
                         version: pom.version,
                         repository: NEXUS_REPOSITORY,
-                        credentialsId: NEXUS_CREDENTIAL_ID,
+                        credentialsId: NEXUS_CREDENTIAL_ID, // <--- uses Nexux_server
                         artifacts: [
                             [artifactId: pom.artifactId, classifier: '', file: artifactPath, type: pom.packaging],
                             [artifactId: pom.artifactId, classifier: '', file: "pom.xml", type: "pom"]
