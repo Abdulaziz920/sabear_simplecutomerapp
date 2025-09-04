@@ -10,7 +10,7 @@ pipeline {
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "http"
         NEXUS_URL = "34.207.60.84:8080"
-        NEXUS_REPOSITORY = "Jenkins-04-Task-1"
+        NEXUS_REPOSITORY = "Abdul"
         NEXUS_CREDENTIAL_ID = "Nexux_server"
     }
     
