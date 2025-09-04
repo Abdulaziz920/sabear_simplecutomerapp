@@ -7,14 +7,14 @@ pipeline {
     }
 
     environment {
-        // Nexus
+        // Nexus configuration
         NEXUS_VERSION       = "nexus3"
         NEXUS_PROTOCOL      = "http"
         NEXUS_URL           = "34.207.60.84:8081"
         NEXUS_REPOSITORY    = "Jenkins-04-Task-1"
         NEXUS_CREDENTIAL_ID = "Nexux_server"
 
-        // Tomcat
+        // Tomcat credentials
         TOMCAT_CRED         = "Tomcat-credentials"
     }
 
@@ -49,8 +49,8 @@ pipeline {
                     def version    = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
                     def packaging  = sh(script: "mvn help:evaluate -Dexpression=project.packaging -q -DforceStdout", returnStdout: true).trim()
 
+                    // Find artifact in target folder
                     def filesByGlob = findFiles(glob: "target/*.${packaging}")
-
                     if (filesByGlob.size() == 0) {
                         error "No artifact found in target directory"
                     }
@@ -58,6 +58,7 @@ pipeline {
                     def artifactPath = filesByGlob[0].path
                     echo "*** File: ${artifactPath}, group: ${groupId}, packaging: ${packaging}, version: ${version}"
 
+                    // Upload to Nexus
                     nexusArtifactUploader(
                         nexusVersion: NEXUS_VERSION,
                         protocol: NEXUS_PROTOCOL,
