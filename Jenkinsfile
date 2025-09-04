@@ -1,52 +1,53 @@
 pipeline {
     agent any
     tools {
-        maven "maven"
+        maven 'MVN_HOME'
     }
     environment {
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "34.207.60.84:8081/"
+        NEXUS_URL = "34.207.60.84:8081"
         NEXUS_REPOSITORY = "Abdul"
         NEXUS_CREDENTIAL_ID = "My-Nexus"
         SCANNER_HOME = tool 'sonar-scanner'
+        // Slack details (already configured in Jenkins → Configure System → Slack)
+        SLACK_CHANNEL = "#jenkins-integration"
     }
     stages {
-        stage("Clone Code") {
+        stage("clone code") {
             steps {
-                git 'https://github.com/betawins/sabear_simplecutomerapp.git'
+                git 'https://github.com/Abdulaziz920/sabear_simplecutomerapp.git'
             }
         }
-        stage("Maven Build") {
+        stage("mvn build") {
             steps {
                 sh 'mvn -Dmaven.test.failure.ignore=true clean install'
             }
         }
-        stage("SonarCloud Analysis") {
+        stage("SonarCloud") {
             steps {
-                withSonarQubeEnv('sonarqube') {
-                    sh '''
-                        $SCANNER_HOME/bin/sonar-scanner \
+                withSonarQubeEnv('sonarqube-server') {
+                    sh '''$SCANNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectKey=Ncodeit \
                         -Dsonar.projectName=Ncodeit \
                         -Dsonar.projectVersion=2.0 \
-                        -Dsonar.sources=src/ \
-                        -Dsonar.binaries=target/classes/ \
+                        -Dsonar.sources=/var/lib/jenkins/workspace/$JOB_NAME/src/ \
+                        -Dsonar.binaries=target/classes/com/visualpathit/account/controller/ \
                         -Dsonar.junit.reportsPath=target/surefire-reports \
                         -Dsonar.jacoco.reportPath=target/jacoco.exec \
-                        -Dsonar.java.binaries=src/
-                    '''
+                        -Dsonar.java.binaries=src/com/room/sample '''
                 }
             }
         }
-        stage("Publish to Nexus") {
+        stage("publish to nexus") {
             steps {
                 script {
-                    def pom = readMavenPom file: "pom.xml"
-                    def filesByGlob = findFiles(glob: "target/*.${pom.packaging}")
-                    def artifactPath = filesByGlob[0].path
-                    if (fileExists(artifactPath)) {
-                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version: ${pom.version}"
+                    pom = readMavenPom file: "pom.xml"
+                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}")
+                    echo "${filesByGlob[0].name} ${filesByGlob[0].path}"
+                    artifactPath = filesByGlob[0].path
+                    artifactExists = fileExists artifactPath
+                    if (artifactExists) {
                         nexusArtifactUploader(
                             nexusVersion: NEXUS_VERSION,
                             protocol: NEXUS_PROTOCOL,
@@ -56,18 +57,8 @@ pipeline {
                             repository: NEXUS_REPOSITORY,
                             credentialsId: NEXUS_CREDENTIAL_ID,
                             artifacts: [
-                                [
-                                    artifactId: pom.artifactId,
-                                    classifier: '',
-                                    file: artifactPath,
-                                    type: pom.packaging
-                                ],
-                                [
-                                    artifactId: pom.artifactId,
-                                    classifier: '',
-                                    file: "pom.xml",
-                                    type: "pom"
-                                ]
+                                [artifactId: pom.artifactId, classifier: '', file: artifactPath, type: pom.packaging],
+                                [artifactId: pom.artifactId, classifier: '', file: "pom.xml", type: "pom"]
                             ]
                         )
                     } else {
@@ -76,16 +67,29 @@ pipeline {
                 }
             }
         }
+        // stage("Deploy to Tomcat") {
+        //     steps {
+        //         withCredentials([usernamePassword(credentialsId: 'Tomcat-credentials', usernameVariable: 'TOMCAT_USER', passwordVariable: 'TOMCAT_PASS')]) {
+        //             script {
+        //                 // Find the WAR file built by Maven
+        //                 def warFile = sh(script: "ls target/*.war | head -n 1", returnStdout: true).trim()
+        //                 def warName = sh(script: "basename ${warFile} .war | tr '[:upper:]' '[:lower:]'", returnStdout: true).trim()
+        //                 echo "Deploying ${warFile} to Tomcat at context path /${warName}..."
+        //                 sh """
+        //                     curl -u $TOMCAT_USER:$TOMCAT_PASS \\
+        //                          -T ${warFile} \\
+        //                          "http://34.229.166.230:8080/manager/text/deploy?path=/${warName}&update=true"
         stage("Deploy to Tomcat") {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'Tomcat-credentials', usernameVariable: 'TOMCAT_USER', passwordVariable: 'TOMCAT_PASS')]) {
-                    script {
-                        def warFile = sh(script: "ls target/*.war | head -n 1", returnStdout: true).trim()
-                        echo "Deploying ${warFile} to Tomcat at context path /simplecustomerapp ..."
-                        sh """
-                            curl -u $TOMCAT_USER:$TOMCAT_PASS \
-                                 -T ${warFile} \
-                                 "http://34.229.166.230:8080/manager/text/deploy?path=/simplecustomerapp&update=true"
+    steps {
+        withCredentials([usernamePassword(credentialsId: 'tomcat', usernameVariable: 'TOMCAT_USER', passwordVariable: 'TOMCAT_PASS')]) {
+            script {
+                // Find the WAR file built by Maven
+                def warFile = sh(script: "ls target/*.war | head -n 1", returnStdout: true).trim()
+                echo "Deploying ${warFile} to Tomcat at context path /simplecustomerapp ..."
+                sh """
+                    curl -u $TOMCAT_USER:$TOMCAT_PASS \
+                         -T ${warFile} \
+                         "http://34.229.166.230:8080/manager/text/deploy?path=/simplecustomerapp&update=true"
                         """
                     }
                 }
@@ -94,12 +98,11 @@ pipeline {
         stage("Slack Notification") {
             steps {
                 slackSend(
-                    channel: env.SLACK_CHANNEL,
+                    channel: "${SLACK_CHANNEL}",
                     color: "#36A64F",
-                    message: "Scripted pipeline for *Simple Customer App* has been successfully deployed in Tomcat :white_check_mark: by SNL for Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"
+                    message: "Declarative pipeline for *Simple Customer App* has been successfully deployed in Tomcat :white_check_mark: by SNL for Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"
                 )
             }
         }
-  }
+    }
 }
-
