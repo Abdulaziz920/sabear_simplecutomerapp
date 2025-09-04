@@ -1,108 +1,105 @@
 pipeline {
     agent any
-
-    environment {
-        NEXUS_CRED = 'My-Nexus'          // Fixed typo
-        TOMCAT_CRED = 'Tomcat-credentials'
+    tools {
+        maven "maven"
     }
-
+    environment {
+        NEXUS_VERSION = "nexus3"
+        NEXUS_PROTOCOL = "http"
+        NEXUS_URL = "34.207.60.84:8081/"
+        NEXUS_REPOSITORY = "Abdul"
+        NEXUS_CREDENTIAL_ID = "My-Nexus"
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
     stages {
-
-        // -----------------------
-        stage('Checkout SCM') {
+        stage("Clone Code") {
             steps {
-                git url: 'https://github.com/Abdulaziz920/hiring-app.git', branch: 'main'
+                git 'https://github.com/betawins/sabear_simplecutomerapp.git'
             }
         }
-
-        // -----------------------
-        stage('Build') {
+        stage("Maven Build") {
             steps {
-                script {
-                    // Set Maven from tool configuration
-                    def mvnHome = tool name: 'MVN_HOME', type: 'maven'
-                    env.PATH = "${mvnHome}/bin:${env.PATH}"
-                }
-                sh 'mvn clean package -DskipTests'
+                sh 'mvn -Dmaven.test.failure.ignore=true clean install'
             }
         }
-
-        // -----------------------
-        stage('SonarQube Analysis') {
+        stage("SonarCloud Analysis") {
             steps {
-                withCredentials([string(credentialsId: 'Sonar-Scanner', variable: 'SONAR_TOKEN')]) {
-                    withSonarQubeEnv('sonar-scanner') {
-                        sh 'mvn sonar:sonar -Dsonar.token=$SONAR_TOKEN'
-                    }
-                }
-            }
-        }
-
-        // -----------------------
-        stage('Deploy to Nexus') {
-            steps {
-                script {
-                    def mvnHome = tool name: 'MVN_HOME', type: 'maven'
-                    env.PATH = "${mvnHome}/bin:${env.PATH}"
-                }
-                withCredentials([usernamePassword(credentialsId: "${NEXUS_CRED}", usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                withSonarQubeEnv('sonarqube') {
                     sh '''
-                        mvn deploy -DskipTests -Dnexus.username=$NEXUS_USER -Dnexus.password=$NEXUS_PASS --settings /var/lib/jenkins/.m2/settings.xml
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectKey=Ncodeit \
+                        -Dsonar.projectName=Ncodeit \
+                        -Dsonar.projectVersion=2.0 \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.binaries=target/classes/ \
+                        -Dsonar.junit.reportsPath=target/surefire-reports \
+                        -Dsonar.jacoco.reportPath=target/jacoco.exec \
+                        -Dsonar.java.binaries=src/
                     '''
                 }
             }
         }
-
-        // -----------------------
-       stage('Deploy to Tomcat') {
-    steps {
-        withCredentials([usernamePassword(credentialsId: "Tomcat-credentials", usernameVariable: 'TOMCAT_USER', passwordVariable: 'TOMCAT_PASS')]) {
-            sh '''
-                # Get the WAR file
-                WAR_FILE=$(ls target/*.war | head -n 1)
-                if [ ! -f "$WAR_FILE" ]; then
-                    echo "WAR file not found!"
-                    exit 1
-                fi
-
-                # Generate context path from WAR name
-                WAR_NAME=$(basename "$WAR_FILE" .war | tr '[:upper:]' '[:lower:]')
-
-                echo "Deploying $WAR_FILE to Tomcat at context path /$WAR_NAME..."
-
-                # Deploy WAR using Tomcat manager
-                curl -v --fail --show-error -u $TOMCAT_USER:$TOMCAT_PASS \
-                     -T "$WAR_FILE" \
-                     "http://34.229.166.230:8080/manager/text/deploy?path=/$WAR_NAME&update=true"
-            '''
+        stage("Publish to Nexus") {
+            steps {
+                script {
+                    def pom = readMavenPom file: "pom.xml"
+                    def filesByGlob = findFiles(glob: "target/*.${pom.packaging}")
+                    def artifactPath = filesByGlob[0].path
+                    if (fileExists(artifactPath)) {
+                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version: ${pom.version}"
+                        nexusArtifactUploader(
+                            nexusVersion: NEXUS_VERSION,
+                            protocol: NEXUS_PROTOCOL,
+                            nexusUrl: NEXUS_URL,
+                            groupId: pom.groupId,
+                            version: pom.version,
+                            repository: NEXUS_REPOSITORY,
+                            credentialsId: NEXUS_CREDENTIAL_ID,
+                            artifacts: [
+                                [
+                                    artifactId: pom.artifactId,
+                                    classifier: '',
+                                    file: artifactPath,
+                                    type: pom.packaging
+                                ],
+                                [
+                                    artifactId: pom.artifactId,
+                                    classifier: '',
+                                    file: "pom.xml",
+                                    type: "pom"
+                                ]
+                            ]
+                        )
+                    } else {
+                        error "*** File: ${artifactPath}, could not be found"
+                    }
+                }
+            }
         }
-    }
-}
-
-
-        // -----------------------
-        stage('Slack Notification') {
+        stage("Deploy to Tomcat") {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'Tomcat-credentials', usernameVariable: 'TOMCAT_USER', passwordVariable: 'TOMCAT_PASS')]) {
+                    script {
+                        def warFile = sh(script: "ls target/*.war | head -n 1", returnStdout: true).trim()
+                        echo "Deploying ${warFile} to Tomcat at context path /simplecustomerapp ..."
+                        sh """
+                            curl -u $TOMCAT_USER:$TOMCAT_PASS \
+                                 -T ${warFile} \
+                                 "http://34.229.166.230:8080/manager/text/deploy?path=/simplecustomerapp&update=true"
+                        """
+                    }
+                }
+            }
+        }
+        stage("Slack Notification") {
             steps {
                 slackSend(
-                    channel: '#jenkins-integration',
-                    color: currentBuild.currentResult == 'SUCCESS' ? 'good' : 'danger',
-                    message: "Hi Team, Jenkins pipeline for *Declarative pipeline* finished! ✅\nDeployed by: Abdul Aziz"
+                    channel: env.SLACK_CHANNEL,
+                    color: "#36A64F",
+                    message: "Scripted pipeline for *Simple Customer App* has been successfully deployed in Tomcat :white_check_mark: by SNL for Job: ${env.JOB_NAME} [${env.BUILD_NUMBER}]"
                 )
             }
         }
-    }
-
-    // -----------------------
-    post {
-        always {
-            echo 'Pipeline finished'
-        }
-        failure {
-            slackSend(
-                channel: '#jenkins-integration',
-                color: 'danger',
-                message: "⚠️ Jenkins pipeline for *Declarative pipeline* failed! Please check."
-            )
-        }
-    }
+  }
 }
+
