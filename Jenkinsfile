@@ -24,7 +24,7 @@ pipeline {
 
         stage("Clone Code") {
             steps {
-                git url: 'https://github.com/Abdulaziz920/sabear_simplecutomerapp.git', branch: 'main'
+                git url: 'https://github.com/Abdulaziz920/sabear_simplecutomerapp.git', branch: 'master'
             }
         }
 
