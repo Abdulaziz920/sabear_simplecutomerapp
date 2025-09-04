@@ -43,7 +43,7 @@ pipeline {
         stage("Publish to Nexus") {
             steps {
                 script {
-                    // Extract values from POM using Maven CLI
+                    // Extract values from POM using Maven CLI (sandbox-safe)
                     def groupId    = sh(script: "mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout", returnStdout: true).trim()
                     def artifactId = sh(script: "mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout", returnStdout: true).trim()
                     def version    = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
